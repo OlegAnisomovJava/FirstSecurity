@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" type="text/css" th:href="@{/resources/css/style.css}">
+</head>
+<body>
+<div>
+    <h2>Админ-панель</h2>
+
+    <!-- ✅ Форма для добавления пользователя -->
+    <h3>Добавить пользователя</h3>
+    <form th:action="@{/admin/add}" method="post">
+        <label>Имя пользователя:</label>
+        <input type="text" name="username" required>
+        <label>Пароль:</label>
+        <input type="password" name="password" required>
+        <label>Роль:</label>
+        <select name="role">
+            <option value="ROLE_USER">USER</option>
+            <option value="ROLE_ADMIN">ADMIN</option>
+        </select>
+        <button type="submit">Добавить</button>
+    </form>
+
+    <!-- ✅ Таблица со всеми пользователями -->
+    <h3>Список пользователей</h3>
+    <table>
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Roles</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="user : ${allUsers}">
+            <td th:text="${user.id}"></td>
+            <td th:text="${user.username}"></td>
+            <td>
+                <span th:each="role : ${user.roles}" th:text="${role.name} + ' '"></span>
+            </td>
+            <td>
+                <!-- ✅ Форма для редактирования -->
+                <form th:action="@{/admin/update}" method="post">
+                    <input type="hidden" name="userId" th:value="${user.id}">
+                    <label>Новое имя:</label>
+                    <input type="text" name="username" th:value="${user.username}">
+                    <label>Новый пароль:</label>
+                    <input type="password" name="password">
+                    <label>Новая роль:</label>
+                    <select name="role">
+                        <option value="ROLE_USER">USER</option>
+                        <option value="ROLE_ADMIN">ADMIN</option>
+                    </select>
+                    <button type="submit">Обновить</button>
+                </form>
+
+                <!-- ✅ Форма для удаления -->
+                <form th:action="@{/admin/delete}" method="post">
+                    <input type="hidden" name="userId" th:value="${user.id}">
+                    <button type="submit">Удалить</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <a href="/">Главная</a>
+</div>
+
+<!-- ✅ Кнопка выхода -->
+<form th:action="@{/logout}" method="post">
+    <button type="submit">Выйти</button>
+</form>
+
+</body>
+</html>
