@@ -3,7 +3,6 @@ package ru.anisimov.springsecurity.FirstSecurity.configs;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -23,31 +22,12 @@ public class WebSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/registration").permitAll() // Доступ к регистрации всем
                         .requestMatchers("/admin/**").hasRole("ADMIN") // Доступ только админам
-                        .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN") // Доступ только пользователям
+                        .requestMatchers("/user/**").hasAnyRole("USER", "ADMIN") // Доступ пользователям и админам
                         .requestMatchers("/", "/resources/**").permitAll() // Главная доступна всем
                         .anyRequest().authenticated() // Остальные страницы - только аутентифицированным пользователям
                 )
-                .formLogin(login -> login
-                        .loginPage("/login")
+                .formLogin(login -> login // Используем стандартное окно Spring Security
                         .permitAll()
-                        .successHandler((request, response, authentication) -> {
-                            var roles = authentication.getAuthorities().stream()
-                                    .map(grantedAuthority -> grantedAuthority.getAuthority())
-                                    .toList();
-
-                            System.out.println("Роли пользователя: " + roles); // Логируем роли
-
-                            if (roles.contains("ROLE_ADMIN")) {
-                                System.out.println("Редирект на /admin");
-                                response.sendRedirect("/admin");
-                            } else if (roles.contains("ROLE_USER")) {
-                                System.out.println("Редирект на /user");
-                                response.sendRedirect("/user");
-                            } else {
-                                System.out.println("Нет подходящей роли, редирект на /");
-                                response.sendRedirect("/");
-                            }
-                        })
                 )
                 .logout(logout -> logout
                         .logoutUrl("/logout")
