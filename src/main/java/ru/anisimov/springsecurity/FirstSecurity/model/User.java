@@ -1,6 +1,9 @@
 package ru.anisimov.springsecurity.FirstSecurity.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -16,13 +19,33 @@ public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Size(min=2, message = "Не меньше 5 знаков")
-    private String username;
-    @Size(min=2, message = "Не меньше 5 знаков")
+
+    @NotBlank(message = "Имя не должно быть пустым")
+    private String firstName;
+
+    @NotBlank(message = "Фамилия не должна быть пустой")
+    private String lastName;
+
+    @Min(value = 0, message = "Возраст должен быть не меньше 0")
+    private int age;
+
+    @Email(message = "Введите корректный email")
+    @NotBlank(message = "Email не должен быть пустым")
+    @Column(unique = true)  // Email должен быть уникальным
+    private String email;
+
+    @Size(min = 5, message = "Пароль должен быть не меньше 5 знаков")
     private String password;
+
     @Transient
     private String passwordConfirm;
+
     @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "users_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
     private Set<Role> roles;
 
     public User() {
@@ -36,9 +59,41 @@ public class User implements UserDetails {
         this.id = id;
     }
 
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     @Override
     public String getUsername() {
-        return username;
+        return email;  // Теперь логинимся по email
     }
 
     @Override
@@ -60,12 +115,6 @@ public class User implements UserDetails {
     public boolean isEnabled() {
         return true;
     }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-
 
     @Override
     public String getPassword() {
@@ -91,11 +140,11 @@ public class User implements UserDetails {
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
     }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return roles.stream()
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .collect(Collectors.toList());
     }
-
 }

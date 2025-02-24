@@ -1,6 +1,7 @@
 package ru.anisimov.springsecurity.FirstSecurity.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,27 +16,41 @@ public class RegistrationController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @GetMapping("/registration")
     public String registrationForm(Model model) {
         model.addAttribute("user", new User());
-        return "registration"; // Показываем форму регистрации
+        return "registration";
     }
 
     @PostMapping("/registration")
-    public String registerUser(@RequestParam String username,
+    public String registerUser(@RequestParam String email,
                                @RequestParam String password,
+                               @RequestParam String firstName,
+                               @RequestParam String lastName,
+                               @RequestParam int age,
                                Model model) {
-        if (userService.findByUsername(username) != null) {
-            model.addAttribute("error", "Пользователь с таким именем уже существует!");
+        if (userService.findByEmail(email).isPresent()) {
+            model.addAttribute("error", "Пользователь с таким email уже существует!");
+            model.addAttribute("user", new User());
             return "registration";
         }
 
         User user = new User();
-        user.setUsername(username);
-        user.setPassword(password);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(password)); // ✅ Не забываем хешировать пароль!
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setAge(age);
 
-        userService.saveUser(user, "ROLE_USER");
+        userService.saveUser(user, "ROLE_USER"); // ✅ Просто вызываем метод без проверки
 
-        return "redirect:/login"; // ✅ После успешной регистрации редиректим на стандартное окно входа
+        return "redirect:/login";
     }
+
+
+
+
 }

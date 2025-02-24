@@ -8,14 +8,39 @@
         body { font-family: Arial, sans-serif; background-color: #f4f4f4; text-align: center; padding: 50px; }
         .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); display: inline-block; }
         h2 { color: #333; }
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        td, th { padding: 10px; border: 1px solid #ddd; text-align: left; }
         a { display: inline-block; margin-top: 15px; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; }
         a:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>Добро пожаловать, <span th:text="${username}"></span>!</h2>
-    <p>Это ваша личная страница.</p>
+    <h2>Добро пожаловать, <span th:text="${firstName} + ' ' + ${lastName}"></span>!</h2>
+    <table>
+        <tr>
+            <th>First Name</th>
+            <td th:text="${firstName}"></td>
+        </tr>
+        <tr>
+            <th>Last Name</th>
+            <td th:text="${lastName}"></td>
+        </tr>
+        <tr>
+            <th>Email</th>
+            <td th:text="${email}"></td>
+        </tr>
+        <tr>
+            <th>Возраст</th>
+            <td th:text="${age}"></td>
+        </tr>
+        <tr>
+            <th>Роли</th>
+            <td>
+                <span th:each="role : ${roles}" th:text="${role.name} + ' '"></span>
+            </td>
+        </tr>
+    </table>
     <a href="/logout">Выйти</a>
 </div>
 </body>

@@ -1,7 +1,6 @@
 package ru.anisimov.springsecurity.FirstSecurity.service;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -14,68 +13,88 @@ import ru.anisimov.springsecurity.FirstSecurity.model.User;
 import ru.anisimov.springsecurity.FirstSecurity.repository.RoleRepository;
 import ru.anisimov.springsecurity.FirstSecurity.repository.UserRepository;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class UserService implements UserDetailsService {
-    @PersistenceContext
-    private EntityManager em;
-    @Autowired
-    UserRepository userRepository;
-    @Autowired
-    RoleRepository roleRepository;
-    @Autowired
-    PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    // ✅ Автоматическое создание ролей при старте приложения
+    @PostConstruct
+    public void initRoles() {
+        if (!roleRepository.existsByName("ROLE_USER")) {
+            roleRepository.save(new Role(null, "ROLE_USER"));
+        }
+        if (!roleRepository.existsByName("ROLE_ADMIN")) {
+            roleRepository.save(new Role(null, "ROLE_ADMIN"));
+        }
+    }
+
+    // ✅ Загружаем пользователя по email
     @Override
     @Transactional
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username);
-
-        if (user == null) {
-            throw new UsernameNotFoundException("User not found");
-        }
-
-        return user;
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден: " + email));
     }
+
+    // ✅ Поиск пользователя по ID
     @Transactional(readOnly = true)
     public User findUserById(Long userId) {
-        Optional<User> userFromDb = userRepository.findById(userId);
-        return userFromDb.orElse(new User());
+        return userRepository.findById(userId).orElse(null);
     }
+
     @Transactional
     public boolean saveUser(User user, String roleName) {
-        User userFromDB = userRepository.findByUsername(user.getUsername());
-
-        if (userFromDB != null) {
-            return false;
+        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
+            return false; // ❌ Пользователь уже существует
         }
 
-        Role role = roleRepository.findByName(roleName); // Возможно, тут ошибка!
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new RuntimeException("Роль " + roleName + " не найдена!"));
+
         user.setRoles(Collections.singleton(role));
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setPassword(passwordEncoder.encode(user.getPassword())); // ✅ Хешируем пароль перед сохранением
         userRepository.save(user);
         return true;
     }
+
+
+
+    // ✅ Обновление пользователя
     @Transactional
     public boolean updateUser(User user) {
-        if (userRepository.existsById(user.getId())) {
-            User existingUser = userRepository.findById(user.getId()).get();
+        Optional<User> existingUserOpt = userRepository.findById(user.getId());
 
-            if (user.getPassword() == null || user.getPassword().isEmpty()) {
-                user.setPassword(existingUser.getPassword()); // Оставляем старый пароль
-            } else {
-                user.setPassword(passwordEncoder.encode(user.getPassword())); // Хешируем новый пароль
-            }
-
-            userRepository.save(user);
-            return true;
+        if (existingUserOpt.isEmpty()) {
+            return false;
         }
-        return false;
+
+        User existingUser = existingUserOpt.get();
+
+        existingUser.setFirstName(user.getFirstName());
+        existingUser.setLastName(user.getLastName());
+        existingUser.setEmail(user.getEmail());
+
+        // Если новый пароль не передан, оставляем старый
+        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+            existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
+        }
+
+        userRepository.save(existingUser);
+        return true;
     }
+
+    // ✅ Удаление пользователя
     @Transactional
     public boolean deleteUser(Long id) {
         if (userRepository.existsById(id)) {
@@ -84,6 +103,8 @@ public class UserService implements UserDetailsService {
         }
         return false;
     }
+
+    // ✅ Получение всех пользователей с ID больше указанного
     @Transactional(readOnly = true)
     public List<User> usergtList(Long id) {
         return userRepository.findAll()
@@ -91,11 +112,17 @@ public class UserService implements UserDetailsService {
                 .filter(user -> user.getId() > id)
                 .collect(Collectors.toList());
     }
+
+    // ✅ Получение списка всех пользователей
     @Transactional(readOnly = true)
     public List<User> allUsers() {
         return userRepository.findAll();
     }
-    public User findByUsername(String username) {
-        return userRepository.findByUsername(username);
+
+    // ✅ Поиск пользователя по email
+    @Transactional(readOnly = true)
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
+
 }
