@@ -54,16 +54,17 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public boolean saveUser(User user, String roleName) {
-        if (userRepository.findByEmail(user.getEmail()).isPresent()) {
-            return false; // ❌ Пользователь уже существует
+    public boolean saveUser(User user) {
+        if (userRepository.existsByEmail(user.getEmail())) {
+            return false;
         }
 
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new RuntimeException("Роль " + roleName + " не найдена!"));
+        Role userRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new RuntimeException("Роль ROLE_USER не найдена!"));
 
-        user.setRoles(Collections.singleton(role));
-        user.setPassword(passwordEncoder.encode(user.getPassword())); // ✅ Хешируем пароль перед сохранением
+        user.setRoles(Collections.singleton(userRole)); // ✅ Назначаем роль пользователю
+        user.setPassword(passwordEncoder.encode(user.getPassword())); // ✅ Хешируем пароль
+
         userRepository.save(user);
         return true;
     }
@@ -85,10 +86,10 @@ public class UserService implements UserDetailsService {
         existingUser.setLastName(user.getLastName());
         existingUser.setEmail(user.getEmail());
 
-        // Если новый пароль не передан, оставляем старый
-        if (user.getPassword() != null && !user.getPassword().isEmpty()) {
+        if (user.getPassword() != null) { // Теперь сюда придёт уже ОРИГИНАЛЬНЫЙ пароль, не хешированный
             existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
         }
+
 
         userRepository.save(existingUser);
         return true;
@@ -124,5 +125,10 @@ public class UserService implements UserDetailsService {
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+    public Role findRoleByName(String roleName) {
+        return roleRepository.findByName(roleName)
+                .orElseThrow(() -> new RuntimeException("Role not found: " + roleName));
+    }
+
 
 }

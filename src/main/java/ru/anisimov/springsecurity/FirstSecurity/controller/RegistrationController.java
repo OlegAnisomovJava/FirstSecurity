@@ -45,7 +45,7 @@ public class RegistrationController {
         user.setLastName(lastName);
         user.setAge(age);
 
-        userService.saveUser(user, "ROLE_USER"); // ✅ Просто вызываем метод без проверки
+        userService.saveUser(user); // ✅ Просто вызываем метод без проверки
 
         return "redirect:/login";
     }
