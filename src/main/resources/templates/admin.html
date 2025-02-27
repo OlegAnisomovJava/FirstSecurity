@@ -79,7 +79,15 @@
                                     th:data-roles="${#strings.listJoin(user.roles.![name], ',')}">
                                 Edit
                             </button>
-                            <button class="btn btn-danger btn-sm" onclick="confirmDelete(this)" th:data-id="${user.id}">Delete</button>
+                            <button class="btn btn-danger btn-sm" onclick="confirmDelete(this)"
+                                    th:data-id="${user.id}"
+                                    th:data-firstname="${user.firstName}"
+                                    th:data-lastname="${user.lastName}"
+                                    th:data-age="${user.age}"
+                                    th:data-email="${user.email}"
+                                    th:data-roles="${#strings.listJoin(user.roles.![name], ',')}">
+                                Delete
+                            </button>
                         </td>
                     </tr>
                     </tbody>
@@ -96,9 +104,9 @@
                     <input type="password" name="password" class="form-control mb-2" placeholder="Password" required>
 
                     <label class="form-label">Role</label>
-                    <select name="roles" class="form-select mb-2" multiple required>
-                        <option value="ADMIN">ADMIN</option>
-                        <option value="USER">USER</option>
+                    <select name="roleNames" multiple>
+                        <option value="ROLE_USER">USER</option>
+                        <option value="ROLE_ADMIN">ADMIN</option>
                     </select>
 
                     <button type="submit" class="btn btn-success">Add new user</button>
@@ -114,17 +122,18 @@
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <form id="editUserForm" method="post">
+                            <form id="editUserForm" th:action="@{/admin/update}" method="post">
                                 <input type="hidden" name="id" id="editUserId">
                                 <input type="text" name="firstName" id="editFirstName" class="form-control mb-2" required>
                                 <input type="text" name="lastName" id="editLastName" class="form-control mb-2" required>
                                 <input type="number" name="age" id="editAge" class="form-control mb-2" required>
                                 <input type="email" name="email" id="editEmail" class="form-control mb-2" required>
                                 <input type="password" name="password" id="editPassword" class="form-control mb-2" placeholder="New Password">
+
                                 <label class="form-label">Role</label>
-                                <select name="roles" id="editRoles" class="form-select mb-2" multiple>
-                                    <option value="ADMIN">ADMIN</option>
-                                    <option value="USER">USER</option>
+                                <select name="roleNames" id="editRoles" class="form-select mb-2" multiple>
+                                    <option value="ROLE_ADMIN">ADMIN</option>
+                                    <option value="ROLE_USER">USER</option>
                                 </select>
                                 <button type="submit" class="btn btn-primary">Save Changes</button>
                             </form>
@@ -132,6 +141,46 @@
                     </div>
                 </div>
             </div>
+            <!-- Delete User Modal -->
+            <div class="modal fade" id="deleteUserModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Delete User</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="deleteUserForm" th:action="@{/admin/delete}" method="post">
+                                <input type="hidden" name="id" id="deleteUserHiddenId">
+
+                                <label class="form-label">ID</label>
+                                <input type="text" class="form-control mb-2" id="deleteUserId" disabled>
+
+                                <label class="form-label">First Name</label>
+                                <input type="text" class="form-control mb-2" id="deleteFirstName" disabled>
+
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control mb-2" id="deleteLastName" disabled>
+
+                                <label class="form-label">Age</label>
+                                <input type="number" class="form-control mb-2" id="deleteAge" disabled>
+
+                                <label class="form-label">Email</label>
+                                <input type="email" class="form-control mb-2" id="deleteEmail" disabled>
+
+                                <label class="form-label">Roles</label>
+                                <input type="text" class="form-control mb-2" id="deleteRoles" disabled>
+
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 </div>
@@ -144,8 +193,6 @@
     }
 
     function editUserFromData(element) {
-        console.log("Функция editUserFromData вызвана!");
-
         document.getElementById('editUserId').value = element.getAttribute("data-id");
         document.getElementById('editFirstName').value = element.getAttribute("data-firstname");
         document.getElementById('editLastName').value = element.getAttribute("data-lastname");
@@ -153,17 +200,42 @@
         document.getElementById('editEmail').value = element.getAttribute("data-email");
 
         let rolesData = element.getAttribute("data-roles");
-        let roles = rolesData ? rolesData.split(",") : [];
+        let roles = rolesData ? rolesData.split(",").map(role => role.trim()) : [];
         let select = document.getElementById('editRoles');
 
         for (let option of select.options) {
             option.selected = roles.includes(option.value);
         }
 
-        console.log("Открываем модальное окно...");
         let modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('editUserModal'));
         modal.show();
     }
+    function confirmDelete(element) {
+        // Получаем данные из атрибутов кнопки
+        let userId = element.getAttribute("data-id");
+        let firstName = element.getAttribute("data-firstname");
+        let lastName = element.getAttribute("data-lastname");
+        let age = element.getAttribute("data-age");
+        let email = element.getAttribute("data-email");
+        let roles = element.getAttribute("data-roles");
+
+        // Заполняем модальное окно
+        document.getElementById('deleteUserId').value = userId;
+        document.getElementById('deleteFirstName').value = firstName;
+        document.getElementById('deleteLastName').value = lastName;
+        document.getElementById('deleteAge').value = age;
+        document.getElementById('deleteEmail').value = email;
+        document.getElementById('deleteRoles').value = roles;
+
+        // Устанавливаем скрытое поле для передачи ID в форму
+        document.getElementById('deleteUserHiddenId').value = userId;
+
+        // Показываем модальное окно
+        let modal = new bootstrap.Modal(document.getElementById('deleteUserModal'));
+        modal.show();
+    }
+
+
 </script>
 
 </body>

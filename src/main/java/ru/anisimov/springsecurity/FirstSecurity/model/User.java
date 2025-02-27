@@ -9,8 +9,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.Collection;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Entity
@@ -31,7 +30,7 @@ public class User implements UserDetails {
 
     @Email(message = "Введите корректный email")
     @NotBlank(message = "Email не должен быть пустым")
-    @Column(unique = true)  // Email должен быть уникальным
+    @Column(unique = true)
     private String email;
 
     @Size(min = 5, message = "Пароль должен быть не меньше 5 знаков")
@@ -40,13 +39,16 @@ public class User implements UserDetails {
     @Transient
     private String passwordConfirm;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinTable(
             name = "users_roles",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
-    private Set<Role> roles;
+    private Set<Role> roles = new HashSet<>();
+
+    @Transient // ❗️Чтобы Spring не пытался автоматически привязать это поле из формы
+    private List<String> roleNames;
 
     public User() {
     }
@@ -93,7 +95,7 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email;  // Теперь логинимся по email
+        return email;
     }
 
     @Override
@@ -147,4 +149,18 @@ public class User implements UserDetails {
                 .map(role -> new SimpleGrantedAuthority(role.getName()))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(id, user.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
+

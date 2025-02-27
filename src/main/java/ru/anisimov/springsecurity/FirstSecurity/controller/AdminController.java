@@ -1,15 +1,24 @@
 package ru.anisimov.springsecurity.FirstSecurity.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import ru.anisimov.springsecurity.FirstSecurity.model.Role;
 import ru.anisimov.springsecurity.FirstSecurity.model.User;
 import ru.anisimov.springsecurity.FirstSecurity.repository.RoleRepository;
+import ru.anisimov.springsecurity.FirstSecurity.repository.UserRepository;
+import ru.anisimov.springsecurity.FirstSecurity.service.RoleService;
 import ru.anisimov.springsecurity.FirstSecurity.service.UserService;
 
 import java.util.HashSet;
@@ -31,6 +40,12 @@ public class AdminController {
     @Autowired
     private RoleRepository roleRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private RoleService roleService;
+
 
     @GetMapping
     public String adminPage(Model model, @AuthenticationPrincipal UserDetails userDetails) {
@@ -45,31 +60,22 @@ public class AdminController {
         return "admin";
     }
 
-    // ✅ Форма добавления нового пользователя
-    @GetMapping("/add")
-    public String showAddUserForm(Model model) {
-        model.addAttribute("user", new User());
-        return "addUser";
-    }
-
     @PostMapping("/addUser")
-    public String addUser(@ModelAttribute User user, @RequestParam List<String> roles, Model model) {
-        Set<Role> roleSet = roles.stream()
-                .map(roleName -> roleRepository.findByName(roleName)
-                        .orElseThrow(() -> new RuntimeException("Роль не найдена: " + roleName)))
-                .collect(Collectors.toSet());
+    public String addUser(@ModelAttribute User user, @RequestParam List<String> roleNames) {
+        Set<Role> roleSet = new HashSet<>();
 
-        if (roleSet.isEmpty()) {
-            model.addAttribute("error", "Ошибка: роли не найдены!");
-            return "admin";
+        for (String roleName : roleNames) {
+            Role role = roleRepository.findByName(roleName) // 🔥 Ищем роль в БД
+                    .orElseThrow(() -> new RuntimeException("Роль не найдена: " + roleName));
+            roleSet.add(role);
         }
 
-        user.setRoles(roleSet);
-        user.setPassword(passwordEncoder.encode(user.getPassword())); // Хешируем пароль
-        userService.saveUser(user);
+        user.setRoles(roleSet); // 🔥 Устанавливаем роли корректно
+        userService.saveUser(user); // Сохраняем пользователя
 
         return "redirect:/admin";
     }
+
 
     @GetMapping("/edit/{id}")
     public String showEditUserForm(@PathVariable("id") Long id, Model model) {
@@ -82,23 +88,33 @@ public class AdminController {
     }
 
     @PostMapping("/update")
-    public String updateUser(@ModelAttribute User user,
-                             @RequestParam String role,
-                             @RequestParam(required = false) String password) {
+    public String updateUser(@RequestParam Long id,
+                             @RequestParam String firstName,
+                             @RequestParam String lastName,
+                             @RequestParam int age,
+                             @RequestParam String email,
+                             @RequestParam(required = false) String password,
+                             @RequestParam(required = false) List<String> roleNames) {
 
-        User existingUser = userService.findUserById(user.getId());
-        if (existingUser == null) {
-            return "redirect:/admin";
+        User user = userService.findUserById(id);
+        if (user == null) {
+            return "redirect:/admin"; // Если пользователь не найден, редирект обратно
         }
 
-        Set<Role> roles = new HashSet<>();
-        roles.add(new Role("ROLE_ADMIN".equals(role) ? 2L : 1L, role));
-        user.setRoles(roles);
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setAge(age);
+        user.setEmail(email);
 
-        if (password != null && !password.trim().isEmpty()) {
+        if (password != null && !password.isEmpty()) {
             user.setPassword(passwordEncoder.encode(password));
-        } else {
-            user.setPassword(existingUser.getPassword());
+        }
+
+        if (roleNames != null && !roleNames.isEmpty()) {
+            Set<Role> roles = roleNames.stream()
+                    .map(roleService::findRoleByName) // Исправлено
+                    .collect(Collectors.toSet());
+            user.setRoles(roles);
         }
 
         userService.updateUser(user);
@@ -116,8 +132,8 @@ public class AdminController {
         return "deleteUser";
     }
 
-    @PostMapping("/deleteConfirmed")
-    public String deleteConfirmed(@RequestParam("userId") Long id) {
+    @PostMapping("/delete")
+    public String deleteUser(@RequestParam("id") Long id) {
         userService.deleteUser(id);
         return "redirect:/admin";
     }

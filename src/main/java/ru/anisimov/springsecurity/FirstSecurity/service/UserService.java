@@ -1,7 +1,12 @@
 package ru.anisimov.springsecurity.FirstSecurity.service;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -19,6 +24,9 @@ import java.util.stream.Collectors;
 @Service
 public class UserService implements UserDetailsService {
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Autowired
     private UserRepository userRepository;
 
@@ -27,6 +35,7 @@ public class UserService implements UserDetailsService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
 
     // ✅ Автоматическое создание ролей при старте приложения
     @PostConstruct
@@ -39,15 +48,31 @@ public class UserService implements UserDetailsService {
         }
     }
 
-    // ✅ Загружаем пользователя по email
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Пользователь не найден: " + email));
+        System.out.println("🔍 Пытаемся загрузить пользователя с email: [" + email + "]");
+
+        if (email == null || email.isEmpty()) {
+            throw new UsernameNotFoundException("❌ Email не может быть пустым!");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("❌ Пользователь не найден: " + email));
+
+        return new org.springframework.security.core.userdetails.User(
+                user.getEmail(),
+                user.getPassword(),
+                mapRolesToAuthorities(user.getRoles()) // Преобразуем роли в GrantedAuthority
+        );
     }
 
-    // ✅ Поиск пользователя по ID
+    private Collection<? extends GrantedAuthority> mapRolesToAuthorities(Set<Role> roles) {
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority(role.getName()))
+                .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public User findUserById(Long userId) {
         return userRepository.findById(userId).orElse(null);
@@ -62,48 +87,78 @@ public class UserService implements UserDetailsService {
         Role userRole = roleRepository.findByName("ROLE_USER")
                 .orElseThrow(() -> new RuntimeException("Роль ROLE_USER не найдена!"));
 
-        user.setRoles(Collections.singleton(userRole)); // ✅ Назначаем роль пользователю
+        user.setRoles(Set.of(userRole)); // ✅ Используем уже найденную роль
         user.setPassword(passwordEncoder.encode(user.getPassword())); // ✅ Хешируем пароль
 
         userRepository.save(user);
         return true;
     }
 
-
-
-    // ✅ Обновление пользователя
     @Transactional
-    public boolean updateUser(User user) {
-        Optional<User> existingUserOpt = userRepository.findById(user.getId());
+    public void updateUser(User user) {
+        User existingUser = userRepository.findById(user.getId())
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-        if (existingUserOpt.isEmpty()) {
-            return false;
+        System.out.println("🔄 Обновление пользователя: " + user.getEmail());
+        System.out.println("🔑 Текущий пароль в БД: " + existingUser.getPassword());
+        System.out.println("🛠 Новый пароль (до шифрования): " + user.getPassword());
+
+        if (user.getPassword() != null && !user.getPassword().trim().isEmpty()) {
+            if (!user.getPassword().startsWith("$2a$")) { // Проверяем, не пришел ли уже хешированный пароль
+                String encodedPassword = passwordEncoder.encode(user.getPassword());
+                System.out.println("🔒 Новый пароль (зашифрованный): " + encodedPassword);
+                existingUser.setPassword(encodedPassword);
+            } else {
+                System.out.println("⚠ Пароль уже хеширован, не шифруем повторно!");
+                existingUser.setPassword(user.getPassword()); // Оставляем его как есть
+            }
+        } else {
+            System.out.println("⚠ Поле пароля пустое, оставляем старый пароль!");
         }
 
-        User existingUser = existingUserOpt.get();
 
         existingUser.setFirstName(user.getFirstName());
         existingUser.setLastName(user.getLastName());
+        existingUser.setAge(user.getAge());
         existingUser.setEmail(user.getEmail());
 
-        if (user.getPassword() != null) { // Теперь сюда придёт уже ОРИГИНАЛЬНЫЙ пароль, не хешированный
-            existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
+        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
+            existingUser.setRoles(user.getRoles());
         }
 
+        // 🔍 Лог перед сохранением
+        System.out.println("🛠 Финальное состояние объекта перед сохранением:");
+        System.out.println("   🔑 Пароль (зашифрованный): " + existingUser.getPassword());
+        System.out.println("   🏷 Email: " + existingUser.getEmail());
+        System.out.println("   🏷 Роли: " + existingUser.getRoles());
 
+        // ❗ Оставляем только save(), убираем merge()
         userRepository.save(existingUser);
-        return true;
+
+        System.out.println("✅ Пользователь обновлен в базе.");
     }
+
+
 
     // ✅ Удаление пользователя
     @Transactional
     public boolean deleteUser(Long id) {
-        if (userRepository.existsById(id)) {
+        if (userRepository.existsById(id)) { // 🔍 Проверяем, существует ли пользователь
+            User user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+            // 1️⃣ Удаляем связи пользователя с ролями
+            user.getRoles().clear();
+            userRepository.save(user);
+
+            // 2️⃣ Теперь можно удалить пользователя
             userRepository.deleteById(id);
-            return true;
+            // 🗑 Удаляем пользователя
+            return true; // ✅ Успешное удаление
         }
-        return false;
+        return false; // ❌ Пользователь не найден
     }
+
 
     // ✅ Получение всех пользователей с ID больше указанного
     @Transactional(readOnly = true)
@@ -128,6 +183,9 @@ public class UserService implements UserDetailsService {
     public Role findRoleByName(String roleName) {
         return roleRepository.findByName(roleName)
                 .orElseThrow(() -> new RuntimeException("Role not found: " + roleName));
+    }
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
     }
 
 

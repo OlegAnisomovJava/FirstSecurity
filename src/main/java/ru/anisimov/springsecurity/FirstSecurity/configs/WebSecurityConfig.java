@@ -5,12 +5,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.web.firewall.StrictHttpFirewall;
+import ru.anisimov.springsecurity.FirstSecurity.repository.UserRepository;
+
 import java.io.IOException;
 
 @Configuration
@@ -38,7 +43,7 @@ public class WebSecurityConfig {
                         .loginPage("/login")  // Используем кастомную страницу
                         .successHandler(customSuccessHandler) // Используем кастомный обработчик входа
                         .failureUrl("/login?error") // Ошибка — снова на логин
-                        .usernameParameter("username") // Email вместо username
+                        .usernameParameter("email") // Email вместо username
                         .passwordParameter("password")
                         .permitAll()
                 )
@@ -54,9 +59,6 @@ public class WebSecurityConfig {
     }
 
 
-
-
-    // ✅ Логика редиректа в зависимости от роли пользователя
     private void redirectBasedOnRole(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
@@ -67,4 +69,15 @@ public class WebSecurityConfig {
             response.sendRedirect("/user");
         }
     }
+    @Bean
+    public StrictHttpFirewall allowSemicolonHttpFirewall() {
+        StrictHttpFirewall firewall = new StrictHttpFirewall();
+        firewall.setAllowSemicolon(true);  // Разрешить использование ';' в URL
+        return firewall;
+    }
+
+
+
+
+
 }

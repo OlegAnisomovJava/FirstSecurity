@@ -16,8 +16,6 @@ public class RegistrationController {
     @Autowired
     private UserService userService;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     @GetMapping("/registration")
     public String registrationForm(Model model) {
@@ -40,15 +38,16 @@ public class RegistrationController {
 
         User user = new User();
         user.setEmail(email);
-        user.setPassword(passwordEncoder.encode(password)); // ✅ Не забываем хешировать пароль!
+        user.setPassword(password);
         user.setFirstName(firstName);
         user.setLastName(lastName);
         user.setAge(age);
 
-        userService.saveUser(user); // ✅ Просто вызываем метод без проверки
+        userService.saveUser(user); // ✅ Пароль хешируется в `saveUser`
 
         return "redirect:/login";
     }
+
 
 
 
