@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import ru.anisimov.springsecurity.FirstSecurity.model.Role;
@@ -46,19 +47,21 @@ public class AdminController {
     @Autowired
     private RoleService roleService;
 
-
     @GetMapping
-    public String adminPage(Model model, @AuthenticationPrincipal UserDetails userDetails) {
-        Optional<User> currentUserOptional = userService.findByEmail(userDetails.getUsername());
+    public String adminPage(Model model, @AuthenticationPrincipal UserDetails currentUser) {
+        List<User> users = userRepository.findAllWithRoles(); // Загружаем всех пользователей
 
-        if (currentUserOptional.isEmpty()) {
-            return "redirect:/login"; // Если пользователь не найден, редиректим на логин
-        }
+        // Найти текущего пользователя в БД по email
+        User user = userRepository.findByEmail(currentUser.getUsername()).orElse(null);
 
-        model.addAttribute("currentUser", currentUserOptional.get());
-        model.addAttribute("allUsers", userService.allUsers());
+        model.addAttribute("users", users);
+        model.addAttribute("currentUser", user); // Добавляем currentUser в модель
         return "admin";
     }
+
+
+
+
 
     @PostMapping("/addUser")
     public String addUser(@ModelAttribute User user, @RequestParam List<String> roleNames) {
@@ -79,7 +82,7 @@ public class AdminController {
 
     @GetMapping("/edit/{id}")
     public String showEditUserForm(@PathVariable("id") Long id, Model model) {
-        User user = userService.findUserById(id);
+        User user = userService.getUserById(id);
         if (user == null) {
             return "redirect:/admin";
         }
@@ -96,7 +99,7 @@ public class AdminController {
                              @RequestParam(required = false) String password,
                              @RequestParam(required = false) List<String> roleNames) {
 
-        User user = userService.findUserById(id);
+        User user = userService.getUserById(id);
         if (user == null) {
             return "redirect:/admin"; // Если пользователь не найден, редирект обратно
         }
@@ -124,7 +127,7 @@ public class AdminController {
     // ✅ Подтверждение удаления
     @GetMapping("/delete/{id}")
     public String confirmDeleteUser(@PathVariable("id") Long id, Model model) {
-        User user = userService.findUserById(id);
+        User user = userService.getUserById(id);
         if (user == null) {
             return "redirect:/admin";
         }
@@ -136,5 +139,9 @@ public class AdminController {
     public String deleteUser(@RequestParam("id") Long id) {
         userService.deleteUser(id);
         return "redirect:/admin";
+    }
+    @GetMapping("/users")
+    public List<User> getAllUsers() {
+        return userService.getAllUsers();
     }
 }

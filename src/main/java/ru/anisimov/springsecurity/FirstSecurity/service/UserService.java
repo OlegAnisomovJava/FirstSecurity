@@ -6,7 +6,6 @@ import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -22,7 +21,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-public class UserService implements UserDetailsService {
+public class UserService implements UserServiceInterface, UserDetailsService { // ✅ Реализуем оба интерфейса
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -36,8 +35,10 @@ public class UserService implements UserDetailsService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
-    // ✅ Автоматическое создание ролей при старте приложения
     @PostConstruct
     public void initRoles() {
         if (!roleRepository.existsByName("ROLE_USER")) {
@@ -53,32 +54,42 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         System.out.println("🔍 Пытаемся загрузить пользователя с email: [" + email + "]");
 
-        if (email == null || email.isEmpty()) {
-            throw new UsernameNotFoundException("❌ Email не может быть пустым!");
-        }
-
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("❌ Пользователь не найден: " + email));
+
+        System.out.println("✅ Найден пользователь: " + user.getEmail());
+        System.out.println("🎭 Роли пользователя до маппинга: " + user.getRoles());
 
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
                 user.getPassword(),
-                mapRolesToAuthorities(user.getRoles()) // Преобразуем роли в GrantedAuthority
+                mapRolesToAuthorities(user.getRoles()) // 📌 Ошибка может быть тут!
         );
     }
 
+
+
+
     private Collection<? extends GrantedAuthority> mapRolesToAuthorities(Set<Role> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw new RuntimeException("❌ Ошибка: у пользователя нет назначенных ролей!");
+        }
+
         return roles.stream()
-                .map(role -> new SimpleGrantedAuthority(role.getName()))
+                .map(role -> {
+                    if (role.getName() == null || role.getName().isEmpty()) {
+                        throw new RuntimeException("❌ Ошибка: у роли нет названия! " + role);
+                    }
+                    return new SimpleGrantedAuthority(role.getName());
+                })
                 .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
-    public User findUserById(Long userId) {
-        return userRepository.findById(userId).orElse(null);
-    }
+
+
 
     @Transactional
+    @Override
     public boolean saveUser(User user) {
         if (userRepository.existsByEmail(user.getEmail())) {
             return false;
@@ -87,81 +98,62 @@ public class UserService implements UserDetailsService {
         Role userRole = roleRepository.findByName("ROLE_USER")
                 .orElseThrow(() -> new RuntimeException("Роль ROLE_USER не найдена!"));
 
-        user.setRoles(Set.of(userRole)); // ✅ Используем уже найденную роль
-        user.setPassword(passwordEncoder.encode(user.getPassword())); // ✅ Хешируем пароль
+        user.setRoles(Set.of(userRole));
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
 
         userRepository.save(user);
         return true;
     }
 
     @Transactional
-    public void updateUser(User user) {
-        User existingUser = userRepository.findById(user.getId())
+    @Override
+    public void updateUser(User updatedUser) {
+        User user = userRepository.findById(updatedUser.getId())
                 .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-        System.out.println("🔄 Обновление пользователя: " + user.getEmail());
-        System.out.println("🔑 Текущий пароль в БД: " + existingUser.getPassword());
-        System.out.println("🛠 Новый пароль (до шифрования): " + user.getPassword());
+        user.setFirstName(updatedUser.getFirstName());
+        user.setLastName(updatedUser.getLastName());
+        user.setAge(updatedUser.getAge());
+        user.setEmail(updatedUser.getEmail());
 
-        if (user.getPassword() != null && !user.getPassword().trim().isEmpty()) {
-            if (!user.getPassword().startsWith("$2a$")) { // Проверяем, не пришел ли уже хешированный пароль
-                String encodedPassword = passwordEncoder.encode(user.getPassword());
-                System.out.println("🔒 Новый пароль (зашифрованный): " + encodedPassword);
-                existingUser.setPassword(encodedPassword);
-            } else {
-                System.out.println("⚠ Пароль уже хеширован, не шифруем повторно!");
-                existingUser.setPassword(user.getPassword()); // Оставляем его как есть
-            }
-        } else {
-            System.out.println("⚠ Поле пароля пустое, оставляем старый пароль!");
+        // ✅ Если передан пароль, обновляем его
+        if (updatedUser.getPassword() != null && !updatedUser.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(updatedUser.getPassword()));
         }
 
+        // ✅ Загружаем роли из БД по ID (чтобы не передавать null)
+        Set<Role> updatedRoles = updatedUser.getRoles().stream()
+                .map(role -> roleRepository.findById(role.getId())
+                        .orElseThrow(() -> new RuntimeException("Роль с ID " + role.getId() + " не найдена")))
+                .collect(Collectors.toSet());
 
-        existingUser.setFirstName(user.getFirstName());
-        existingUser.setLastName(user.getLastName());
-        existingUser.setAge(user.getAge());
-        existingUser.setEmail(user.getEmail());
+        user.setRoles(updatedRoles);
 
-        if (user.getRoles() != null && !user.getRoles().isEmpty()) {
-            existingUser.setRoles(user.getRoles());
-        }
-
-        // 🔍 Лог перед сохранением
-        System.out.println("🛠 Финальное состояние объекта перед сохранением:");
-        System.out.println("   🔑 Пароль (зашифрованный): " + existingUser.getPassword());
-        System.out.println("   🏷 Email: " + existingUser.getEmail());
-        System.out.println("   🏷 Роли: " + existingUser.getRoles());
-
-        // ❗ Оставляем только save(), убираем merge()
-        userRepository.save(existingUser);
-
-        System.out.println("✅ Пользователь обновлен в базе.");
+        userRepository.save(user);
     }
 
 
 
-    // ✅ Удаление пользователя
+
+
     @Transactional
+    @Override
     public boolean deleteUser(Long id) {
-        if (userRepository.existsById(id)) { // 🔍 Проверяем, существует ли пользователь
+        if (userRepository.existsById(id)) {
             User user = userRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
-            // 1️⃣ Удаляем связи пользователя с ролями
             user.getRoles().clear();
             userRepository.save(user);
 
-            // 2️⃣ Теперь можно удалить пользователя
             userRepository.deleteById(id);
-            // 🗑 Удаляем пользователя
-            return true; // ✅ Успешное удаление
+            return true;
         }
-        return false; // ❌ Пользователь не найден
+        return false;
     }
 
-
-    // ✅ Получение всех пользователей с ID больше указанного
     @Transactional(readOnly = true)
+    @Override
     public List<User> usergtList(Long id) {
         return userRepository.findAll()
                 .stream()
@@ -169,24 +161,36 @@ public class UserService implements UserDetailsService {
                 .collect(Collectors.toList());
     }
 
-    // ✅ Получение списка всех пользователей
-    @Transactional(readOnly = true)
+    @Transactional
+    @Override
     public List<User> allUsers() {
         return userRepository.findAll();
     }
 
-    // ✅ Поиск пользователя по email
     @Transactional(readOnly = true)
+    @Override
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
+
+    @Override
     public Role findRoleByName(String roleName) {
         return roleRepository.findByName(roleName)
                 .orElseThrow(() -> new RuntimeException("Role not found: " + roleName));
     }
+    @Transactional
     public User getUserById(Long id) {
-        return userRepository.findById(id).orElse(null);
+        User user = userRepository.findById(id).orElse(null);
+        if (user != null) {
+            user.getRoles().size(); // Принудительная инициализация ролей
+        }
+        return user;
     }
 
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<User> getAllUsers() {
+        return userRepository.findAll(); // Получаем всех пользователей
+    }
 }
