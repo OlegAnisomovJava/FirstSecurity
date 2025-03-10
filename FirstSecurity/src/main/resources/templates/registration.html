@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .register-container {
+            max-width: 400px;
+            padding: 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="register-container">
+    <h2 class="mb-4">Регистрация</h2>
+    <form th:action="@{/registration}" method="post" th:object="${user}">
+        <div class="mb-3">
+            <input type="text" class="form-control" th:field="*{firstName}" placeholder="Имя" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('firstName')}" th:errors="*{firstName}"></div>
+        </div>
+        <div class="mb-3">
+            <input type="text" class="form-control" th:field="*{lastName}" placeholder="Фамилия" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('lastName')}" th:errors="*{lastName}"></div>
+        </div>
+        <div class="mb-3">
+            <input type="number" class="form-control" th:field="*{age}" placeholder="Возраст" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('age')}" th:errors="*{age}"></div>
+        </div>
+        <div class="mb-3">
+            <input type="email" class="form-control" th:field="*{email}" placeholder="Email" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('email')}" th:errors="*{email}"></div>
+            <div class="text-danger" th:text="${emailError}"></div>
+        </div>
+        <div class="mb-3">
+            <input type="password" class="form-control" th:field="*{password}" placeholder="Пароль" required>
+            <div class="text-danger" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Зарегистрироваться</button>
+    </form>
+    <a href="/" class="d-block mt-3">Вернуться на главную</a>
+</div>
+</body>
+</html>
